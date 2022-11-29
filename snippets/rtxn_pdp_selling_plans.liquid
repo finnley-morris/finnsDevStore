@@ -1,0 +1,198 @@
+{%- liquid
+  assign current_variant = product.selected_or_first_available_variant | default: product.variants.first
+  assign current_selling_plan_allocation = current_variant.selected_selling_plan_allocation
+
+  if current_selling_plan_allocation == nil and current_variant.requires_selling_plan
+  assign current_selling_plan_allocation = current_variant.selling_plan_allocations | first
+  endif
+
+  assign offer = current_selling_plan_allocation | default: current_variant
+-%}
+
+{% assign first_selling_plan_allocation = product.variants.first.selling_plan_allocations[0] %}
+
+{% if product.selling_plan_groups[0].name %}
+  <label for="selling_plan_group">group</label><input name="selling_plan_group" value="onetime">
+<label for="selling_plan">plan</label ><input  name="selling_plan" value="{{ current_selling_plan_allocation.selling_plan.id | default: '' }}">
+<div class="rtx_widget_injection_parent" style="display: block;">
+  <div class="rtx_container" data-product='{{ product | json }}'>
+    {% unless product.requires_selling_plan %}
+      <div class="rtx_option rtx_option--onetime option--active">
+        <div class="rtx_option_selector">
+          <input type="radio" value="onetime" name="selling_plan_select" id="product_onetime" checked>
+          <label for="product_onetime" class="rtx_option_label">
+            <div class="rtx_option_heading">
+              One-time purchase
+            </div>
+            <div class="rtx_option_subheading">
+              {{ product.price | money }}
+            </div>
+          </label>
+        </div>
+      </div>
+    {% endunless %}
+
+    {% for group in product.selling_plan_groups %}
+    <div class="rtx_option rtx_option--sub">
+      <div class="rtx_option_selector">
+        <input type="radio" value="{{ group.id }}" name="selling_plan_select" id="{{ group.id }}">
+        <label for="{{ group.id }}" class="rtx_option_label">
+          <div class="rtx_option_heading">
+            {{ group.name}}
+          </div>
+          <div class="rtx_option_subheading">
+            {{ first_selling_plan_allocation.price | money }}
+          </div>
+        </label>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="rtx_option_plans" style="display: none">
+    {% for group in product.selling_plan_groups %}
+      <select name="rtx_option_plans_dropdown" class="rtx_option_plans_dropdown" id={{ group.id }}>
+        {% for selling_plan in group.selling_plans %}
+          <option value="{{selling_plan.id}}">{{selling_plan.name}}</option>
+        {% endfor %}
+      </select>
+    {% endfor %}
+  </div>
+</div>
+
+<style>
+  .rtx_widget_injection_parent {
+    margin-bottom: 15px;
+  }
+  .rtx_container {
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-box-pack: justify;
+    -ms-flex-pack: justify;
+    justify-content: space-between;
+    -ms-flex-wrap: wrap;
+    flex-wrap: wrap;
+  }
+  .rtx_option {
+    flex-basis: calc(50% - 0.4rem);
+    position: relative;
+    border: 1.5px solid #000;
+    /* border-radius: 4px; */
+    text-align: center;
+    font-size: .75rem;
+    letter-spacing: .0196972px;
+    margin-bottom: 15px;
+  }
+  .rtx_option.option--active {
+    background-color: #000;
+    color: #fff;
+  }
+  .rtx_option_selector input {
+    display: none;
+  }
+  .rtx_option_plans {
+    width: 100%;
+  }
+  .rtx_option_plans select {
+    font-size: 1rem;
+    width: 100%;
+    border-color: #000;
+    background-color: transparent;
+    color: #222;
+    line-height: 1.2;
+    padding: 10px 20px;
+    display: block;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url('data:image/svg+xml;utf8,<svg width="23" height="10" viewBox="0 0 23 10" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1.08789 1L11.0879 9L21.0879 1" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+    background-repeat: no-repeat;
+    background-position-x: calc(100% - 10px);
+    background-position-y: 50%;
+    background-size: 20px 8px;
+    padding-right: 40px;
+  }
+  .rtx_option_label {
+    display: block;
+    padding: 1.5rem;
+  }
+  .rtx_option_heading {
+    font-size: 1rem;
+    letter-spacing: .29px;
+    text-transform: uppercase;
+  }
+  .rtx_option_subheading {
+    font-size: 1rem;
+  }
+</style>
+
+<script>
+  var product = {{product | json}}
+  var group = document.querySelector('input[name="selling_plan_group"]').value
+  function checkShowStatus() {
+    fetch('https://finnley-retextion.ngrok.io/api/shopify/storefront/is-enabled?shop=finnleys-dev-store.myshopify.com').then(response => response.json()).then(data => {
+      if(data.storefrontEnabled) {
+        document.querySelector('.rtx_widget_injection_parent').style.display = "block";
+      }
+    })
+  }
+  function setSellingPlan() {
+    var selectedOption = document.querySelector('input[name="selling_plan_select"]:checked');
+  console.log(selectedOption)
+    if(selectedOption.value === 'onetime') {
+      document.querySelector('input[name="selling_plan"]').value = ''
+      document.querySelectorAll('.rtx_option_plans').forEach(plans => {
+        plans.style.display = "none"
+      })
+    } else {
+      var productData = product
+      var sellingPlanId = document.querySelector('.rtx_option_plans_dropdown').value
+      var locale = window.Shopify.locale || "en"
+      var currency = window.Shopify.currency.active || "USD"
+      var matchingAllocation = productData.variants[0].selling_plan_allocations.find(selling_plan => selling_plan.selling_plan_id == sellingPlanId)
+      var money = new Intl.NumberFormat(locale, {style: "currency", currency}).format(matchingAllocation.price / 100)
+      document.querySelector('.rtx_option--sub .rtx_option_subheading').textContent = money
+      document.querySelector('input[name="selling_plan"]').value = document.querySelector('.rtx_option_plans_dropdown.option--active').value
+      document.querySelectorAll('.rtx_option_plans').forEach(plans => {
+        plans.style.display = "block"
+      })
+    }
+  }
+
+  document.querySelector('.rtx_option_plans_dropdown').addEventListener('change', function(e) {
+    setSellingPlan();
+  })
+
+  var inputs = document.querySelectorAll('input[name="selling_plan_select"]').forEach(rbi => {
+    rbi.addEventListener('click', function(e) {
+      if (group !== rbi.value){
+  group = rbi.value 
+  document.querySelector('input[name="selling_plan_group"]').value = group}
+  })
+    rbi.addEventListener('change', function(e) {
+      var selected = document.querySelector('input[name="selling_plan_select"]:checked')
+      document.querySelectorAll('.rtx_option').forEach(option => {
+        option.classList.remove('option--active')
+      })
+      selected.closest('.rtx_option').classList.add('option--active')
+      if(selected.value === 'onetime') {
+        document.querySelectorAll('.rtx_option_plans').forEach(plans => {
+          plans.style.display = "none"
+        })
+      } else {
+        document.querySelectorAll('.rtx_option_plans_dropdown').forEach(plans => {
+          if (selected.value === plans.id){
+            plans.classList.add('option--active')
+          plans.style.display = "block"}else{ 
+            plans.classList.remove('option--active')
+            plans.style.display = "none"}
+        })
+      }
+      setSellingPlan()
+    })
+  })
+  
+  document.addEventListener("DOMContentLoaded", function() {
+  	checkShowStatus();
+  })
+</script>
+{% endif %}
